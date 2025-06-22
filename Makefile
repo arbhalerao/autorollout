@@ -230,3 +230,20 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+
+##@ Custom Targets
+
+# -----------------------------------------------------------------------------
+# Custom Targets
+# -----------------------------------------------------------------------------
+
+DEV_SCRIPTS_DIR := dev/scripts
+
+.PHONY: create-cluster
+create-cluster: ## Create local Kind cluster and bootstrap dev environment
+	@$(DEV_SCRIPTS_DIR)/create-dev-cluster.sh
+
+.PHONY: delete-cluster
+delete-cluster: ## Delete local Kind cluster
+	@$(DEV_SCRIPTS_DIR)/delete-dev-cluster.sh
