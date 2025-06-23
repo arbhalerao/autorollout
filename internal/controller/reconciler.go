@@ -9,7 +9,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// handleResourceChange processes the resource change and triggers rollouts if needed
+// TODO(aditya): Trigger rollout for each deployment
+// TODO(aditya): Handle rollout errors and retries
 func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj AutoRolloutResource) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -28,6 +29,13 @@ func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj Au
 			log.Error(err, "Failed to handle ConfigMap change")
 			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
 		}
+	case *corev1.Secret:
+		resourceType = "Secret"
+		err = r.handleSecretChange(ctx, resource)
+		if err != nil {
+			log.Error(err, "Failed to handle Secret change")
+			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
+		}
 	}
 
 	log.Info("Resource with autorollout label has been changed",
@@ -36,9 +44,6 @@ func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj Au
 		"namespace", obj.GetNamespace(),
 		"resourceVersion", obj.GetResourceVersion(),
 	)
-
-	// TODO(aditya): Trigger rollout for each deployment
-	// TODO(aditya): Handle rollout errors and retries
 
 	return ctrl.Result{}, nil
 }
@@ -59,6 +64,27 @@ func (r *AutoRolloutReconciler) handleConfigMapChange(ctx context.Context, cm *c
 
 	for _, deployment := range deployments {
 		log.Info("Deployment using ConfigMap", "deployment", deployment.Name)
+	}
+
+	return nil
+}
+
+func (r *AutoRolloutReconciler) handleSecretChange(ctx context.Context, secret *corev1.Secret) error {
+	log := logf.FromContext(ctx)
+
+	deployments, err := r.findDeploymentsUsingSecret(ctx, secret)
+	if err != nil {
+		log.Error(err, "Failed to find deployments using Secret")
+		return err
+	}
+
+	if len(deployments) == 0 {
+		log.Info("No deployments found using this Secret", "secret", secret.Name)
+		return nil
+	}
+
+	for _, deployment := range deployments {
+		log.Info("Deployment using Secret", "deployment", deployment.Name)
 	}
 
 	return nil

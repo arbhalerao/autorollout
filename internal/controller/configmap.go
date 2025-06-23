@@ -5,7 +5,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-// shouldProcessConfigMapUpdate returns true if ConfigMap data has changed and has autorollout label
 func (r *AutoRolloutReconciler) shouldProcessConfigMapUpdate(e event.UpdateEvent) bool {
 	oldCM, newCM := e.ObjectOld.(*corev1.ConfigMap), e.ObjectNew.(*corev1.ConfigMap)
 	if oldCM == nil || newCM == nil {
@@ -15,7 +14,6 @@ func (r *AutoRolloutReconciler) shouldProcessConfigMapUpdate(e event.UpdateEvent
 	return r.hasAutoRolloutLabel(newCM) && r.configMapDataChanged(oldCM, newCM)
 }
 
-// configMapDataChanged compares the Data field between old and new ConfigMap
 func (r *AutoRolloutReconciler) configMapDataChanged(oldCM, newCM *corev1.ConfigMap) bool {
 	if len(oldCM.Data) != len(newCM.Data) {
 		return true

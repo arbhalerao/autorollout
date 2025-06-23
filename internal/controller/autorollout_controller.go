@@ -8,6 +8,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -19,6 +20,7 @@ type AutoRolloutReconciler struct {
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;patch
 
 func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -29,6 +31,11 @@ func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.handleResourceChange(ctx, &cm)
 	}
 
+	var secret corev1.Secret
+	if err := r.Get(ctx, req.NamespacedName, &secret); err == nil {
+		return r.handleResourceChange(ctx, &secret)
+	}
+
 	log.Info("Resource not found, might have been deleted", "namespacedName", req.NamespacedName)
 	return ctrl.Result{}, nil
 }
@@ -37,6 +44,7 @@ func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *AutoRolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.ConfigMap{}).
+		Watches(&corev1.Secret{}, &handler.EnqueueRequestForObject{}).
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool { return false },
 			UpdateFunc: r.shouldProcessUpdate,

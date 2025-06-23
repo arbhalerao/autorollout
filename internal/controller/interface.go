@@ -14,8 +14,8 @@ type AutoRolloutResource interface {
 }
 
 var _ AutoRolloutResource = &corev1.ConfigMap{}
+var _ AutoRolloutResource = &corev1.Secret{}
 
-// shouldProcessUpdate returns true if resource data has changed and has autorollout label
 func (r *AutoRolloutReconciler) shouldProcessUpdate(e event.UpdateEvent) bool {
 	if _, isOldCM := e.ObjectOld.(*corev1.ConfigMap); isOldCM {
 		if _, isNewCM := e.ObjectNew.(*corev1.ConfigMap); isNewCM {
@@ -23,10 +23,15 @@ func (r *AutoRolloutReconciler) shouldProcessUpdate(e event.UpdateEvent) bool {
 		}
 	}
 
+	if _, isOldSecret := e.ObjectOld.(*corev1.Secret); isOldSecret {
+		if _, isNewSecret := e.ObjectNew.(*corev1.Secret); isNewSecret {
+			return r.shouldProcessSecretUpdate(e)
+		}
+	}
+
 	return false
 }
 
-// hasAutoRolloutLabel checks if resource has autorollout.io=true label
 func (r *AutoRolloutReconciler) hasAutoRolloutLabel(obj AutoRolloutResource) bool {
 	labels := obj.GetLabels()
 	if labels == nil {
