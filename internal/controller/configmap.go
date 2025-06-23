@@ -6,17 +6,17 @@ import (
 )
 
 // shouldProcessConfigMapUpdate returns true if ConfigMap data has changed and has autorollout label
-func shouldProcessConfigMapUpdate(e event.UpdateEvent) bool {
+func (r *AutoRolloutReconciler) shouldProcessConfigMapUpdate(e event.UpdateEvent) bool {
 	oldCM, newCM := e.ObjectOld.(*corev1.ConfigMap), e.ObjectNew.(*corev1.ConfigMap)
 	if oldCM == nil || newCM == nil {
 		return false
 	}
 
-	return hasAutoRolloutLabel(newCM) && configMapDataChanged(oldCM, newCM)
+	return r.hasAutoRolloutLabel(newCM) && r.configMapDataChanged(oldCM, newCM)
 }
 
 // configMapDataChanged compares the Data field between old and new ConfigMap
-func configMapDataChanged(oldCM, newCM *corev1.ConfigMap) bool {
+func (r *AutoRolloutReconciler) configMapDataChanged(oldCM, newCM *corev1.ConfigMap) bool {
 	if len(oldCM.Data) != len(newCM.Data) {
 		return true
 	}

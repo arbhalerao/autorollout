@@ -29,7 +29,6 @@ func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.handleResourceChange(ctx, &cm)
 	}
 
-	// Resource might have been deleted or doesn't exist
 	log.Info("Resource not found, might have been deleted", "namespacedName", req.NamespacedName)
 	return ctrl.Result{}, nil
 }
@@ -40,7 +39,7 @@ func (r *AutoRolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&corev1.ConfigMap{}).
 		WithEventFilter(predicate.Funcs{
 			CreateFunc: func(e event.CreateEvent) bool { return false },
-			UpdateFunc: shouldProcessUpdate,
+			UpdateFunc: r.shouldProcessUpdate,
 			DeleteFunc: func(e event.DeleteEvent) bool { return false },
 		}).
 		Named("autorollout").

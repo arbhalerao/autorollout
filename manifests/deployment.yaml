@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-env-vars
+  namespace: default
+  labels:
+    app: app-env-vars
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app-env-vars
+  template:
+    metadata:
+      labels:
+        app: app-env-vars
+    spec:
+      containers:
+        - name: app-container
+          image: nginx:1.21
+          ports:
+            - containerPort: 8080
+          # Individual environment variables from ConfigMap
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: log.level
+            - name: SERVER_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: server.mode
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-env-from
+  namespace: default
+  labels:
+    app: app-env-from
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app-env-from
+  template:
+    metadata:
+      labels:
+        app: app-env-from
+    spec:
+      containers:
+        - name: app-container
+          image: nginx:1.21
+          ports:
+            - containerPort: 8080
+          # All ConfigMap keys as environment variables
+          envFrom:
+            - configMapRef:
+                name: app-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-volume-mount
+  namespace: default
+  labels:
+    app: app-volume-mount
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app-volume-mount
+  template:
+    metadata:
+      labels:
+        app: app-volume-mount
+    spec:
+      containers:
+        - name: app-container
+          image: nginx:1.21
+          ports:
+            - containerPort: 8080
+          # ConfigMap mounted as volume
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+      volumes:
+        - name: config-volume
+          configMap:
+            name: app-config
