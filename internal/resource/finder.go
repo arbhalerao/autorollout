@@ -1,4 +1,4 @@
-package controller
+package resource
 
 import (
 	"context"
@@ -10,11 +10,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func (r *AutoRolloutReconciler) findDeploymentsUsingConfigMap(ctx context.Context, cm *corev1.ConfigMap) ([]appsv1.Deployment, error) {
+func (w *Watcher) FindDeploymentsUsingConfigMap(ctx context.Context, cm *corev1.ConfigMap) ([]appsv1.Deployment, error) {
 	log := logf.FromContext(ctx)
 
 	deploymentList := &appsv1.DeploymentList{}
-	err := r.List(ctx, deploymentList, client.InNamespace(cm.GetNamespace()))
+	err := w.List(ctx, deploymentList, client.InNamespace(cm.GetNamespace()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deployments: %w", err)
 	}
@@ -23,7 +23,7 @@ func (r *AutoRolloutReconciler) findDeploymentsUsingConfigMap(ctx context.Contex
 	cmName := cm.GetName()
 
 	for _, dep := range deploymentList.Items {
-		if r.deploymentUsesConfigMap(&dep, cmName) {
+		if w.deploymentUsesConfigMap(&dep, cmName) {
 			usingDeployments = append(usingDeployments, dep)
 			log.Info("Found deployment using ConfigMap",
 				"deployment", dep.Name,
@@ -35,11 +35,11 @@ func (r *AutoRolloutReconciler) findDeploymentsUsingConfigMap(ctx context.Contex
 	return usingDeployments, nil
 }
 
-func (r *AutoRolloutReconciler) findDeploymentsUsingSecret(ctx context.Context, secret *corev1.Secret) ([]appsv1.Deployment, error) {
+func (w *Watcher) FindDeploymentsUsingSecret(ctx context.Context, secret *corev1.Secret) ([]appsv1.Deployment, error) {
 	log := logf.FromContext(ctx)
 
 	deploymentList := &appsv1.DeploymentList{}
-	err := r.List(ctx, deploymentList, client.InNamespace(secret.GetNamespace()))
+	err := w.List(ctx, deploymentList, client.InNamespace(secret.GetNamespace()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deployments: %w", err)
 	}
@@ -48,7 +48,7 @@ func (r *AutoRolloutReconciler) findDeploymentsUsingSecret(ctx context.Context, 
 	secretName := secret.GetName()
 
 	for _, dep := range deploymentList.Items {
-		if r.deploymentUsesSecret(&dep, secretName) {
+		if w.deploymentUsesSecret(&dep, secretName) {
 			usingDeployments = append(usingDeployments, dep)
 			log.Info("Found deployment using Secret",
 				"deployment", dep.Name,
@@ -60,7 +60,18 @@ func (r *AutoRolloutReconciler) findDeploymentsUsingSecret(ctx context.Context, 
 	return usingDeployments, nil
 }
 
-func (r *AutoRolloutReconciler) deploymentUsesConfigMap(dep *appsv1.Deployment, cmName string) bool {
+func (w *Watcher) FindAffectedDeployments(ctx context.Context, resource AutoRolloutResource) ([]appsv1.Deployment, error) {
+	switch res := resource.(type) {
+	case *corev1.ConfigMap:
+		return w.FindDeploymentsUsingConfigMap(ctx, res)
+	case *corev1.Secret:
+		return w.FindDeploymentsUsingSecret(ctx, res)
+	default:
+		return nil, fmt.Errorf("unsupported resource type: %T", resource)
+	}
+}
+
+func (w *Watcher) deploymentUsesConfigMap(dep *appsv1.Deployment, cmName string) bool {
 	podSpec := dep.Spec.Template.Spec
 
 	for _, vol := range podSpec.Volumes {
@@ -70,13 +81,13 @@ func (r *AutoRolloutReconciler) deploymentUsesConfigMap(dep *appsv1.Deployment, 
 	}
 
 	for _, container := range podSpec.Containers {
-		if r.containerUsesConfigMap(&container, cmName) {
+		if w.containerUsesConfigMap(&container, cmName) {
 			return true
 		}
 	}
 
 	for _, container := range podSpec.InitContainers {
-		if r.containerUsesConfigMap(&container, cmName) {
+		if w.containerUsesConfigMap(&container, cmName) {
 			return true
 		}
 	}
@@ -84,7 +95,7 @@ func (r *AutoRolloutReconciler) deploymentUsesConfigMap(dep *appsv1.Deployment, 
 	return false
 }
 
-func (r *AutoRolloutReconciler) deploymentUsesSecret(dep *appsv1.Deployment, secretName string) bool {
+func (w *Watcher) deploymentUsesSecret(dep *appsv1.Deployment, secretName string) bool {
 	podSpec := dep.Spec.Template.Spec
 
 	for _, vol := range podSpec.Volumes {
@@ -100,13 +111,13 @@ func (r *AutoRolloutReconciler) deploymentUsesSecret(dep *appsv1.Deployment, sec
 	}
 
 	for _, container := range podSpec.Containers {
-		if r.containerUsesSecret(&container, secretName) {
+		if w.containerUsesSecret(&container, secretName) {
 			return true
 		}
 	}
 
 	for _, container := range podSpec.InitContainers {
-		if r.containerUsesSecret(&container, secretName) {
+		if w.containerUsesSecret(&container, secretName) {
 			return true
 		}
 	}
@@ -114,7 +125,7 @@ func (r *AutoRolloutReconciler) deploymentUsesSecret(dep *appsv1.Deployment, sec
 	return false
 }
 
-func (r *AutoRolloutReconciler) containerUsesConfigMap(container *corev1.Container, cmName string) bool {
+func (w *Watcher) containerUsesConfigMap(container *corev1.Container, cmName string) bool {
 	for _, env := range container.Env {
 		if env.ValueFrom != nil && env.ValueFrom.ConfigMapKeyRef != nil {
 			if env.ValueFrom.ConfigMapKeyRef.Name == cmName {
@@ -132,7 +143,7 @@ func (r *AutoRolloutReconciler) containerUsesConfigMap(container *corev1.Contain
 	return false
 }
 
-func (r *AutoRolloutReconciler) containerUsesSecret(container *corev1.Container, secretName string) bool {
+func (w *Watcher) containerUsesSecret(container *corev1.Container, secretName string) bool {
 	for _, env := range container.Env {
 		if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
 			if env.ValueFrom.SecretKeyRef.Name == secretName {

@@ -1,20 +1,35 @@
-package controller
+package rollout
 
 import (
 	"context"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/arbhalerao/autorollout/internal/labels"
+	"github.com/arbhalerao/autorollout/internal/resource"
 )
 
-// TODO(aditya): Trigger rollout for each deployment
-// TODO(aditya): Handle rollout errors and retries
-func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj AutoRolloutResource) (ctrl.Result, error) {
+type Manager struct {
+	client.Client
+	resourceWatcher *resource.Watcher
+}
+
+func NewManager(client client.Client) *Manager {
+	return &Manager{
+		Client:          client,
+		resourceWatcher: resource.NewWatcher(client),
+	}
+}
+
+func (m *Manager) HandleResourceChange(ctx context.Context, obj resource.AutoRolloutResource) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if !r.hasAutoRolloutLabel(obj) {
+	if !labels.HasAutoRolloutLabel(obj) {
 		return ctrl.Result{}, nil
 	}
 
@@ -24,14 +39,14 @@ func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj Au
 	switch resource := obj.(type) {
 	case *corev1.ConfigMap:
 		resourceType = "ConfigMap"
-		err = r.handleConfigMapChange(ctx, resource)
+		err = m.handleConfigMapChange(ctx, resource)
 		if err != nil {
 			log.Error(err, "Failed to handle ConfigMap change")
 			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
 		}
 	case *corev1.Secret:
 		resourceType = "Secret"
-		err = r.handleSecretChange(ctx, resource)
+		err = m.handleSecretChange(ctx, resource)
 		if err != nil {
 			log.Error(err, "Failed to handle Secret change")
 			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
@@ -48,10 +63,10 @@ func (r *AutoRolloutReconciler) handleResourceChange(ctx context.Context, obj Au
 	return ctrl.Result{}, nil
 }
 
-func (r *AutoRolloutReconciler) handleConfigMapChange(ctx context.Context, cm *corev1.ConfigMap) error {
+func (m *Manager) handleConfigMapChange(ctx context.Context, cm *corev1.ConfigMap) error {
 	log := logf.FromContext(ctx)
 
-	deployments, err := r.findDeploymentsUsingConfigMap(ctx, cm)
+	deployments, err := m.resourceWatcher.FindDeploymentsUsingConfigMap(ctx, cm)
 	if err != nil {
 		log.Error(err, "Failed to find deployments using ConfigMap")
 		return err
@@ -69,10 +84,10 @@ func (r *AutoRolloutReconciler) handleConfigMapChange(ctx context.Context, cm *c
 	return nil
 }
 
-func (r *AutoRolloutReconciler) handleSecretChange(ctx context.Context, secret *corev1.Secret) error {
+func (m *Manager) handleSecretChange(ctx context.Context, secret *corev1.Secret) error {
 	log := logf.FromContext(ctx)
 
-	deployments, err := r.findDeploymentsUsingSecret(ctx, secret)
+	deployments, err := m.resourceWatcher.FindDeploymentsUsingSecret(ctx, secret)
 	if err != nil {
 		log.Error(err, "Failed to find deployments using Secret")
 		return err
@@ -88,4 +103,15 @@ func (r *AutoRolloutReconciler) handleSecretChange(ctx context.Context, secret *
 	}
 
 	return nil
+}
+
+func (m *Manager) rolloutDeployments(ctx context.Context, deployments []appsv1.Deployment) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	for _, deployment := range deployments {
+		log.Info("Would trigger rollout for deployment", "deployment", deployment.Name)
+		// TODO(aditya): Implement actual rollout logic
+	}
+
+	return ctrl.Result{}, nil
 }

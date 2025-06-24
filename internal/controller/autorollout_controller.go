@@ -7,16 +7,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/arbhalerao/autorollout/internal/resource"
+	"github.com/arbhalerao/autorollout/internal/rollout"
 )
 
 // AutoRolloutReconciler watches ConfigMaps and Secrets and triggers rollouts.
 type AutoRolloutReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	resourceWatcher *resource.Watcher
+	rolloutManager  *rollout.Manager
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
@@ -26,30 +30,28 @@ type AutoRolloutReconciler struct {
 func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	var cm corev1.ConfigMap
-	if err := r.Get(ctx, req.NamespacedName, &cm); err == nil {
-		return r.handleResourceChange(ctx, &cm)
+	obj, err := r.resourceWatcher.GetResource(ctx, req.NamespacedName)
+	if err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var secret corev1.Secret
-	if err := r.Get(ctx, req.NamespacedName, &secret); err == nil {
-		return r.handleResourceChange(ctx, &secret)
+	if obj == nil {
+		log.Info("Resource not found, might have been deleted", "namespacedName", req.NamespacedName)
+		return ctrl.Result{}, nil
 	}
 
-	log.Info("Resource not found, might have been deleted", "namespacedName", req.NamespacedName)
-	return ctrl.Result{}, nil
+	return r.rolloutManager.HandleResourceChange(ctx, obj)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AutoRolloutReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.resourceWatcher = resource.NewWatcher(r.Client)
+	r.rolloutManager = rollout.NewManager(r.Client)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.ConfigMap{}).
 		Watches(&corev1.Secret{}, &handler.EnqueueRequestForObject{}).
-		WithEventFilter(predicate.Funcs{
-			CreateFunc: func(e event.CreateEvent) bool { return false },
-			UpdateFunc: r.shouldProcessUpdate,
-			DeleteFunc: func(e event.DeleteEvent) bool { return false },
-		}).
+		WithEventFilter(NewAutoRolloutPredicate(r.resourceWatcher)).
 		Named("autorollout").
 		Complete(r)
 }
