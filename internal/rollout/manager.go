@@ -112,13 +112,13 @@ func (m *Manager) rolloutDeployments(ctx context.Context, deployments []appsv1.D
 		log.Info("Triggering rollout for deployment", "deployment", deployment.Name)
 
 		updated := deployment.DeepCopy()
-		if updated.Spec.Template.ObjectMeta.Annotations == nil {
-			updated.Spec.Template.ObjectMeta.Annotations = map[string]string{}
+		if updated.Spec.Template.Annotations == nil {
+			updated.Spec.Template.Annotations = map[string]string{}
 		}
 
-		updated.Spec.Template.ObjectMeta.Annotations["autorolloutTimestamp"] = time.Now().Format(time.RFC3339)
+		updated.Spec.Template.Annotations["autorolloutTimestamp"] = time.Now().Format(time.RFC3339)
 
-		if err := m.Client.Update(ctx, updated); err != nil {
+		if err := m.Update(ctx, updated); err != nil {
 			log.Error(err, "Failed to trigger rollout for deployment", "deployment", deployment.Name)
 			return err
 		}
