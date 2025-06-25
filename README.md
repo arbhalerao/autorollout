@@ -1,135 +1,113 @@
 # autorollout
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A Kubernetes controller that automatically triggers rollouts of Deployments when their ConfigMaps or Secrets change.
+
+## Overview
+
+### Features
+
+- **Automatic Rollouts**: Automatically restart deployments when ConfigMaps or Secrets are updated
+- **Label-based**: Simple opt-in using labels - no annotations needed on deployments
+- **Efficient**: Only watches resources with autorollout labels
+- **Safe**: Uses Kubernetes' built-in rolling update mechanism
+
+### How it Works
+
+1. Add `autorollout.io: "true"` label to your ConfigMap or Secret
+2. Add `autorollout.io: "true"` label to your Deployment
+3. autorollout watches for changes to labeled resources
+4. When a change is detected, it finds all labeled Deployments using that resource
+5. Triggers a rolling update by updating the deployment's restart annotation
+
+### Resource Detection
+
+autorollout automatically detects when Deployments use ConfigMaps or Secrets through:
+
+- **Environment Variables**: `envFrom.configMapRef`, `env.valueFrom.configMapKeyRef`
+- **Volume Mounts**: `volumes.configMap`, `volumes.secret`
+- **Image Pull Secrets**: `imagePullSecrets`
 
 ## Getting Started
 
-### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+### Installation
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
-
-```sh
-make docker-build docker-push IMG=<some-registry>/autorollout:tag
+```bash
+kubectl apply -f https://raw.githubusercontent.com/arbhalerao/autorollout/v1.0.0/autorollout-v1.0.0.yaml
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+### Quick Start
 
-**Install the CRDs into the cluster:**
+#### Deploy Examples
 
-```sh
-make install
+```bash
+# Deploy all example manifests (7 deployments showing different patterns)
+kubectl apply -f manifests/
+
+# Verify everything is running
+kubectl get pods,configmaps,secrets
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+#### Test Automatic Rollouts
 
-```sh
-make deploy IMG=<some-registry>/autorollout:tag
+```bash
+# Update ConfigMap - will restart 3 deployments
+kubectl patch configmap app-config -p '{"data":{"log.level":"debug"}}'
+
+# Update Secret - will restart 4 deployments  
+kubectl patch secret app-secret -p '{"data":{"username":"bmV3LXVzZXI="}}'
+
+# Watch pods restart automatically
+kubectl get pods -w
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+## Configuration
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+The controller runs with minimal configuration. All behavior is controlled through labels on your ConfigMaps and Secrets.
 
-```sh
-kubectl apply -k config/samples/
+## Development
+
+### Running Locally
+
+```bash
+# Clone the repository
+git clone https://github.com/arbhalerao/autorollout.git
+cd autorollout
+
+# Install dependencies
+go mod download
+
+# Run against your current kubectl context
+make run
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+### Development Cluster
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+```bash
+# Create a kind cluster for testing
+make create-cluster
 
-```sh
-kubectl delete -k config/samples/
+# Deploy to the cluster
+make deploy IMG=autorollout:dev
+
+# OR 
+
+# run locally against your current k8s context
+make run
+
+# Clean up
+make delete-cluster
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+## Troubleshooting
 
-```sh
-make uninstall
-```
+### Common Issues
 
-**UnDeploy the controller from the cluster:**
+**Deployment not rolling out?**
+- Ensure the ConfigMap/Secret has `autorollout.io: "true"` label
+- Ensure the Deployment has `autorollout.io: "true"` label
+- Verify the Deployment actually uses the ConfigMap/Secret
+- Check controller logs for any errors
 
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/autorollout:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/autorollout/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+**Multiple rollouts happening?**
+- This is expected behavior when a ConfigMap/Secret is used by multiple labeled Deployments
+- All affected labeled Deployments will roll out simultaneously
