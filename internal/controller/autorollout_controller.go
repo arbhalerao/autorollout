@@ -25,7 +25,7 @@ type AutoRolloutReconciler struct {
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;patch;update
 
 func (r *AutoRolloutReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)

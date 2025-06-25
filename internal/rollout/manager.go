@@ -81,7 +81,7 @@ func (m *Manager) handleConfigMapChange(ctx context.Context, cm *corev1.ConfigMa
 		log.Info("Deployment using ConfigMap", "deployment", deployment.Name)
 	}
 
-	return nil
+	return m.rolloutDeployments(ctx, deployments)
 }
 
 func (m *Manager) handleSecretChange(ctx context.Context, secret *corev1.Secret) error {
@@ -102,16 +102,27 @@ func (m *Manager) handleSecretChange(ctx context.Context, secret *corev1.Secret)
 		log.Info("Deployment using Secret", "deployment", deployment.Name)
 	}
 
-	return nil
+	return m.rolloutDeployments(ctx, deployments)
 }
 
-func (m *Manager) rolloutDeployments(ctx context.Context, deployments []appsv1.Deployment) (ctrl.Result, error) {
+func (m *Manager) rolloutDeployments(ctx context.Context, deployments []appsv1.Deployment) error {
 	log := logf.FromContext(ctx)
 
 	for _, deployment := range deployments {
-		log.Info("Would trigger rollout for deployment", "deployment", deployment.Name)
-		// TODO(aditya): Implement actual rollout logic
+		log.Info("Triggering rollout for deployment", "deployment", deployment.Name)
+
+		updated := deployment.DeepCopy()
+		if updated.Spec.Template.ObjectMeta.Annotations == nil {
+			updated.Spec.Template.ObjectMeta.Annotations = map[string]string{}
+		}
+
+		updated.Spec.Template.ObjectMeta.Annotations["autorolloutTimestamp"] = time.Now().Format(time.RFC3339)
+
+		if err := m.Client.Update(ctx, updated); err != nil {
+			log.Error(err, "Failed to trigger rollout for deployment", "deployment", deployment.Name)
+			return err
+		}
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
