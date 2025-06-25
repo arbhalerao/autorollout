@@ -29,6 +29,12 @@ autorollout automatically detects when Deployments use ConfigMaps or Secrets thr
 
 ## Getting Started
 
+```bash
+# Clone the repository
+git clone https://github.com/arbhalerao/autorollout.git
+cd autorollout
+```
+
 ### Installation
 
 ```bash
@@ -69,10 +75,6 @@ The controller runs with minimal configuration. All behavior is controlled throu
 ### Running Locally
 
 ```bash
-# Clone the repository
-git clone https://github.com/arbhalerao/autorollout.git
-cd autorollout
-
 # Install dependencies
 go mod download
 
@@ -88,11 +90,6 @@ make create-cluster
 
 # Deploy to the cluster
 make deploy IMG=autorollout:dev
-
-# OR 
-
-# run locally against your current k8s context
-make run
 
 # Clean up
 make delete-cluster
