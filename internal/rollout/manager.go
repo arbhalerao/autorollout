@@ -19,10 +19,10 @@ type Manager struct {
 	resourceWatcher *resource.Watcher
 }
 
-func NewManager(client client.Client) *Manager {
+func NewManager(c client.Client) *Manager {
 	return &Manager{
-		Client:          client,
-		resourceWatcher: resource.NewWatcher(client),
+		Client:          c,
+		resourceWatcher: resource.NewWatcher(c),
 	}
 }
 
@@ -36,17 +36,17 @@ func (m *Manager) HandleResourceChange(ctx context.Context, obj resource.AutoRol
 	resourceType := "Unknown"
 	var err error
 
-	switch resource := obj.(type) {
+	switch res := obj.(type) {
 	case *corev1.ConfigMap:
 		resourceType = "ConfigMap"
-		err = m.handleConfigMapChange(ctx, resource)
+		err = m.handleConfigMapChange(ctx, res)
 		if err != nil {
 			log.Error(err, "Failed to handle ConfigMap change")
 			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
 		}
 	case *corev1.Secret:
 		resourceType = "Secret"
-		err = m.handleSecretChange(ctx, resource)
+		err = m.handleSecretChange(ctx, res)
 		if err != nil {
 			log.Error(err, "Failed to handle Secret change")
 			return ctrl.Result{RequeueAfter: time.Minute * 5}, err

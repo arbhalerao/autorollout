@@ -16,8 +16,8 @@ type Watcher struct {
 	client.Client
 }
 
-func NewWatcher(client client.Client) *Watcher {
-	return &Watcher{Client: client}
+func NewWatcher(c client.Client) *Watcher {
+	return &Watcher{Client: c}
 }
 
 func (w *Watcher) GetResource(ctx context.Context, namespacedName types.NamespacedName) (AutoRolloutResource, error) {
