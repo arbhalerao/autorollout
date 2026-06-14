@@ -4,6 +4,17 @@ A Kubernetes controller that automatically triggers rollouts of Deployments when
 
 ## Overview
 
+### Architecture
+
+#### Summary
+
+- A **Kubernetes operator** (Kubebuilder v4 / controller-runtime) that auto-restarts Deployments when a ConfigMap/Secret they consume changes. **CRD-free**: it introduces no custom resources, opt-in is a label (`autorollout.io=true`) and the dependency graph is derived live from Deployment pod specs.
+- The manager watches **ConfigMaps** (`For`) and **Secrets** (`Watches`) via the shared informer cache. An **event predicate** rejects Create/Delete and metadata-only updates, so the reconciler fires only on real data changes to labeled resources.
+- On reconcile, the **Watcher** lists Deployments in the changed resource's namespace and inspects pod specs across all reference styles (env `valueFrom`, `envFrom`, volume mounts, image-pull secrets) to find affected Deployments; the **rollout Manager** then patches each Deployment's pod-template annotation (`autorolloutTimestamp`), delegating the actual restart to Kubernetes' native rolling update.
+- Runs as a single in-cluster Deployment with optional leader election, health/ready probes, and an authn/authz-protected metrics server; everything goes through the **Kubernetes API server** (no external datastore).
+
+![Architecture](docs/arch.png)
+
 ### Features
 
 - **Automatic Rollouts**: Automatically restart deployments when ConfigMaps or Secrets are updated
@@ -59,7 +70,7 @@ kubectl get pods,configmaps,secrets
 # Update ConfigMap - will restart 3 deployments
 kubectl patch configmap app-config -p '{"data":{"log.level":"debug"}}'
 
-# Update Secret - will restart 4 deployments  
+# Update Secret - will restart 4 deployments
 kubectl patch secret app-secret -p '{"data":{"username":"bmV3LXVzZXI="}}'
 
 # Watch pods restart automatically
